@@ -89,6 +89,14 @@ class FileConcatenatorApp:
             variable=self.add_filename
         ).pack(anchor=tk.W)
         
+        # Nuevo checkbox para quitar la primera línea
+        self.remove_first_line = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            options_frame,
+            text="Quitar primera línea de cada archivo (excepto el primero si se incluye encabezado)",
+            variable=self.remove_first_line
+        ).pack(anchor=tk.W)
+        
         # Botón de concatenación
         ttk.Button(
             main_frame,
@@ -175,25 +183,39 @@ class FileConcatenatorApp:
                     
                     if self.add_filename.get():
                         writer.writerow([f"# Archivo: {os.path.basename(file)}"])
-                        
-                    if i == 0 or self.add_header.get():
-                        # Escribir todas las filas para el primer archivo
+                    
+                    # Determinar si debemos incluir la primera línea de este archivo
+                    include_first_line = (i == 0 and self.add_header.get()) or not self.remove_first_line.get()
+                    
+                    if include_first_line:
+                        # Leer todas las filas incluyendo la primera
                         for row in reader:
                             writer.writerow(row)
                     else:
-                        # Saltar el encabezado para los archivos siguientes
-                        next(reader)
+                        # Saltar la primera línea
+                        next(reader, None)  # El None es para evitar errores si el archivo está vacío
                         for row in reader:
                             writer.writerow(row)
                             
     def concatenate_text_files(self, output_path):
         with open(output_path, 'w', encoding='utf-8') as outfile:
-            for file in self.selected_files:
+            for i, file in enumerate(self.selected_files):
                 if self.add_filename.get():
                     outfile.write(f"\n# Archivo: {os.path.basename(file)}\n")
-                    
+                
                 with open(file, 'r', encoding='utf-8') as infile:
-                    outfile.write(infile.read())
+                    # Determinar si debemos incluir la primera línea de este archivo
+                    include_first_line = (i == 0 and self.add_header.get()) or not self.remove_first_line.get()
+                    
+                    if include_first_line:
+                        # Leer todo el contenido normalmente
+                        outfile.write(infile.read())
+                    else:
+                        # Saltar la primera línea
+                        lines = infile.readlines()
+                        if lines:  # Verificar que el archivo no esté vacío
+                            outfile.write(''.join(lines[1:]))  # Unir las líneas desde la segunda hasta el final
+                
                 outfile.write('\n')
 
 if __name__ == "__main__":
