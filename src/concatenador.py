@@ -16,6 +16,7 @@ class FileConcatenatorApp:
         self.selected_files = []
         self.output_directory = os.path.expanduser("~\\Documents")
         self.custom_filename = tk.StringVar(value="archivo_concatenado")
+        self.lines_to_skip = tk.IntVar(value=0)
         
         self.create_gui()
         
@@ -89,13 +90,24 @@ class FileConcatenatorApp:
             variable=self.add_filename
         ).pack(anchor=tk.W)
         
-        # Nuevo checkbox para quitar la primera línea
-        self.remove_first_line = tk.BooleanVar(value=False)
-        ttk.Checkbutton(
-            options_frame,
-            text="Quitar primera línea de cada archivo (excepto el primero si se incluye encabezado)",
-            variable=self.remove_first_line
-        ).pack(anchor=tk.W)
+        # Frame para número de líneas a ocultar
+        skip_lines_frame = ttk.Frame(options_frame)
+        skip_lines_frame.pack(fill=tk.X, pady=5, anchor=tk.W)
+        
+        ttk.Label(
+            skip_lines_frame,
+            text="Número de líneas a ocultar (excepto primer archivo si se incluye encabezado):"
+        ).pack(side=tk.LEFT, padx=5)
+        
+        # Spinner/Entry para el número de líneas
+        lines_spinner = ttk.Spinbox(
+            skip_lines_frame,
+            from_=0,
+            to=100,
+            textvariable=self.lines_to_skip,
+            width=5
+        )
+        lines_spinner.pack(side=tk.LEFT, padx=5)
         
         # Botón de concatenación
         ttk.Button(
@@ -176,6 +188,7 @@ class FileConcatenatorApp:
     def concatenate_csv_files(self, output_path):
         with open(output_path, 'w', newline='', encoding='utf-8') as outfile:
             writer = csv.writer(outfile)
+            lines_to_skip = self.lines_to_skip.get()
             
             for i, file in enumerate(self.selected_files):
                 with open(file, 'r', encoding='utf-8') as infile:
@@ -184,37 +197,38 @@ class FileConcatenatorApp:
                     if self.add_filename.get():
                         writer.writerow([f"# Archivo: {os.path.basename(file)}"])
                     
-                    # Determinar si debemos incluir la primera línea de este archivo
-                    include_first_line = (i == 0 and self.add_header.get()) or not self.remove_first_line.get()
+                    # Determinar cuántas líneas saltar para este archivo
+                    skip_count = 0
+                    if i > 0 or not self.add_header.get():
+                        skip_count = lines_to_skip
                     
-                    if include_first_line:
-                        # Leer todas las filas incluyendo la primera
-                        for row in reader:
-                            writer.writerow(row)
-                    else:
-                        # Saltar la primera línea
-                        next(reader, None)  # El None es para evitar errores si el archivo está vacío
-                        for row in reader:
-                            writer.writerow(row)
+                    # Saltar las líneas según corresponda
+                    rows = list(reader)
+                    start_index = min(skip_count, len(rows))
+                    
+                    for row in rows[start_index:]:
+                        writer.writerow(row)
                             
     def concatenate_text_files(self, output_path):
         with open(output_path, 'w', encoding='utf-8') as outfile:
+            lines_to_skip = self.lines_to_skip.get()
+            
             for i, file in enumerate(self.selected_files):
                 if self.add_filename.get():
                     outfile.write(f"\n# Archivo: {os.path.basename(file)}\n")
                 
                 with open(file, 'r', encoding='utf-8') as infile:
-                    # Determinar si debemos incluir la primera línea de este archivo
-                    include_first_line = (i == 0 and self.add_header.get()) or not self.remove_first_line.get()
+                    # Determinar cuántas líneas saltar para este archivo
+                    skip_count = 0
+                    if i > 0 or not self.add_header.get():
+                        skip_count = lines_to_skip
                     
-                    if include_first_line:
-                        # Leer todo el contenido normalmente
-                        outfile.write(infile.read())
-                    else:
-                        # Saltar la primera línea
-                        lines = infile.readlines()
-                        if lines:  # Verificar que el archivo no esté vacío
-                            outfile.write(''.join(lines[1:]))  # Unir las líneas desde la segunda hasta el final
+                    # Leer todas las líneas
+                    lines = infile.readlines()
+                    
+                    # Escribir solo las líneas que no se deben saltar
+                    start_index = min(skip_count, len(lines))
+                    outfile.write(''.join(lines[start_index:]))
                 
                 outfile.write('\n')
 
